@@ -86,7 +86,7 @@ fun NavGraph(
             ShelfScreen(navController = navController)
         }
         composable(route = Screen.BorrowScreen.route) {
-            BorrowScreen(navController = navController)
+            BorrowScreen(navController = navController, viewModel= viewModel)
         }
         composable(route = Screen.SettingScreen.route) {
             SettingScreen(navController = navController,viewModel= viewModel)

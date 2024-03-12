@@ -6,6 +6,8 @@ import com.example.team10mobileproject.ViewModel.Response
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
+import com.google.firebase.database.MutableData
+import com.google.firebase.database.Transaction
 import com.google.firebase.database.ValueEventListener
 import com.google.firebase.database.ktx.database
 import com.google.firebase.ktx.Firebase
@@ -14,13 +16,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.callbackFlow
-
+import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.flow.Flow
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.UUID
 
 typealias SignUpResponse = Response<Boolean>
 typealias SendEmailVerificationResponse = Response<Boolean>
@@ -35,20 +38,148 @@ data class Book(
     val Url: String = "",
     val Course: String = "",
     val Description: String = "",
+
 ) {
     // No-argument constructor
-    constructor() : this("", "", "")
+    constructor() : this("", "", "","")
 }
+data class BorrowBook(
+    val Title: String = "",
+    val Url: String = "",
+    val Course: String = "",
+    val Description: String = "",
+    val BorrowDate: String ="",
+    val ExpiryDate: String ="",
+    val copyType: String ="",
 
+) {
+    // No-argument constructor
+    constructor() : this("", "", "","","","")
+}
 class FirebaseRepo {
 
     private var auth: FirebaseAuth = FirebaseAuth.getInstance()
-    private val db =
-        Firebase.database("https://mobileproject-63310-default-rtdb.asia-southeast1.firebasedatabase.app/")
+    private val db = Firebase.database("https://mobileproject-63310-default-rtdb.asia-southeast1.firebasedatabase.app/")
     private val accountRef = db.getReference("Account")
 
-    val currentUser get() = auth.currentUser
 
+
+    suspend fun markAsFavorite(userId: String, book: Book) {
+        // Construct the path to the user's wishlist
+        val wishlistRef = db.getReference("Account").child(userId).child("Wishlist")
+
+        // Create a unique ID for the book in the wishlist
+        // Assuming you have a way to generate a consistent ID for each book
+        // For simplicity, let's use the book's title as the ID
+        val bookId = book.Title // This should be unique for each book
+
+        // Check if the book is already in the wishlist
+        val bookSnapshot = wishlistRef.child(bookId).get().await()
+        if (bookSnapshot.exists()) {
+            // If the book is already in the wishlist, delete it
+            wishlistRef.child(bookId).removeValue().await()
+        } else {
+            // If the book is not in the wishlist, add it
+            val bookData = mapOf(
+                "title" to book.Title,
+                "url" to book.Url,
+                "course" to book.Course,
+                "description" to book.Description,
+                // Add other relevant book details here if needed
+            )
+            wishlistRef.child(bookId).setValue(bookData).await()
+        }
+    }
+
+
+    fun getBorrowedBooks(userId: String): Flow<List<BorrowBook>> = callbackFlow {
+        val borrowedBooksRef = db.getReference("Account").child(userId).child("BorrowedBooks")
+
+        Log.d("getBorrowedBooks", "Starting to retrieve borrowed books for user: $userId")
+
+        val listener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                Log.d("getBorrowedBooks", "Data changed for user: $userId")
+
+                val borrowedBooks = mutableListOf<BorrowBook>()
+
+                snapshot.children.forEach { borrowedBookSnapshot ->
+                    val bookId = borrowedBookSnapshot.key?.split("-")?.firstOrNull()
+                    val copyType = borrowedBookSnapshot.key?.split("-")?.lastOrNull()
+
+                    if (bookId != null && copyType != null) {
+                        Log.d("getBorrowedBooks", "Processing bookId: $bookId, copyType: $copyType")
+
+                        val bookRef = db.getReference("Books").child(bookId)
+                        bookRef.addListenerForSingleValueEvent(object : ValueEventListener {
+                            override fun onDataChange(bookSnapshot: DataSnapshot) {
+                                Log.d("getBorrowedBooks", "Book details retrieved for bookId: $bookId")
+
+                                val title = bookSnapshot.child("Title").getValue(String::class.java) ?: ""
+                                val url = bookSnapshot.child("Url").getValue(String::class.java) ?: ""
+                                val course = bookSnapshot.child("Course").getValue(String::class.java) ?: ""
+                                val description = bookSnapshot.child("Description").getValue(String::class.java) ?: ""
+                                val borrowDate = borrowedBookSnapshot.child("BorrowDate").getValue(String::class.java) ?: ""
+                                val expiryDate = borrowedBookSnapshot.child("ExpiryDate").getValue(String::class.java) ?: ""
+                                val book = BorrowBook(title, url, course, description, borrowDate, expiryDate, copyType)
+                                borrowedBooks.add(book)
+
+                                // Check if all books have been processed
+                                if (borrowedBooks.size.toLong() == snapshot.childrenCount) {
+                                    Log.d("getBorrowedBooks", "All books processed for user: $userId")
+                                    trySend(borrowedBooks)
+                                }
+                            }
+
+                            override fun onCancelled(error: DatabaseError) {
+                                Log.e("getBorrowedBooks", "Failed to retrieve book details: ${error.message}")
+                                close(Exception("Failed to retrieve book details: ${error.message}"))
+                            }
+                        })
+                    }
+                }
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                Log.e("getBorrowedBooks", "Failed to retrieve borrowed books: ${error.message}")
+                close(Exception("Failed to retrieve borrowed books: ${error.message}"))
+            }
+        }
+
+        borrowedBooksRef.addListenerForSingleValueEvent(listener)
+
+        awaitClose {
+            Log.d("getBorrowedBooks", "Removing event listener for user: $userId")
+            borrowedBooksRef.removeEventListener(listener)
+        }
+    }
+    fun returnBook(userId: String, bookId: String, copyType: String, onComplete: (Response<Boolean>) -> Unit) {
+        // Remove the book from the user's borrowed books
+        val borrowedBooksRef = db.getReference("Account").child(userId).child("BorrowedBooks")
+        val uniqueBookId = "$bookId-$copyType"
+        borrowedBooksRef.child(uniqueBookId).removeValue()
+
+        // Increment the quantity of the book
+        val booksRef = db.getReference("Books").child(bookId)
+        val incrementTask = booksRef.child(copyType + "Copies").runTransaction(object : Transaction.Handler {
+            override fun doTransaction(currentData: MutableData): Transaction.Result {
+                val currentQuantity = currentData.getValue(Long::class.java) ?: 0
+                currentData.value = currentQuantity + 1
+                return Transaction.success(currentData)
+            }
+
+            override fun onComplete(error: DatabaseError?, committed: Boolean, currentData: DataSnapshot?) {
+                if (error != null) {
+                    Log.e("returnBook", "Failed to return book: ${error.message}")
+                    onComplete(Response.Failure(Exception("Failed to return book: ${error.message}")))
+                } else if (committed) {
+                    onComplete(Response.Success(true))
+                } else {
+                    onComplete(Response.Failure(Exception("Transaction not committed")))
+                }
+            }
+        })
+    }
     // Function to get the hard copies of a book as a flow
     fun observeHardCopies(bookId: String): Flow<Int> {
         return callbackFlow {
@@ -305,5 +436,7 @@ class FirebaseRepo {
     }
 
 }
+
+
 
 

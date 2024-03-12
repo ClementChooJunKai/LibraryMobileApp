@@ -89,10 +89,11 @@ fun BookDetails(modifier: Modifier = Modifier,
                                 modifier = Modifier.size(200.dp)
                             )
                         }
-                        IconButton(onClick = { /* Handle click */ }) {
+                        IconButton(onClick = { selectedBook?.let { viewModel.markBookAsFavorite(it) } }) {
                             Icon(
                                 imageVector = Icons.Default.FavoriteBorder,
-                                contentDescription = "Mark as favorite"
+                                contentDescription = "Mark as favorite",
+                                tint = if (viewModel.heartSuccess.value) Color.Red else Color.Unspecified
                             )
                         }
                     }

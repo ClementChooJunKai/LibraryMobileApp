@@ -17,6 +17,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import coil.compose.rememberAsyncImagePainter
 import com.example.team10mobileproject.Repo.Book
+import com.example.team10mobileproject.Repo.BorrowBook
 import com.example.team10mobileproject.Repo.FirebaseRepo
 import com.example.team10mobileproject.Repo.SignInResponse
 import com.example.team10mobileproject.Repo.SignUpResponse
@@ -38,6 +39,8 @@ class FirebaseViewModel(private val firebaseRepo: FirebaseRepo) : ViewModel() {
     val recentlyViewedBooks: LiveData<List<Book>> = _recentlyViewedBooks
         // LiveData to communicate the success event back to the UI
     val borrowBookSuccess = mutableStateOf(false)
+    private val _returnBookResult = MutableLiveData<Response<Boolean>>()
+    val returnBookResult: LiveData<Response<Boolean>> = _returnBookResult
     var signUpResponse by mutableStateOf<SignUpResponse>(Response.Success(false))
         private set
     var signInResponse by mutableStateOf<SignInResponse>(Response.Success(false))
@@ -50,6 +53,37 @@ class FirebaseViewModel(private val firebaseRepo: FirebaseRepo) : ViewModel() {
     private val _softCopies = MutableLiveData<Int>()
     val softCopies: LiveData<Int> = _softCopies
 
+    private val _borrowedBooks = MutableLiveData<List<BorrowBook>>()
+    val borrowedBooks: LiveData<List<BorrowBook>> = _borrowedBooks
+    val heartSuccess = mutableStateOf(false)
+
+
+    fun markBookAsFavorite( book: Book) {
+        viewModelScope.launch {
+            try {
+                firebaseRepo.markAsFavorite(sid.value, book)
+                heartSuccess.value=true
+            } catch (e: Exception) {
+                heartSuccess.value=false
+            }
+        }
+    }
+
+
+
+
+    fun returnBook( bookId: String, copyType: String) {
+        firebaseRepo.returnBook(sid.value, bookId, copyType) { response ->
+            _returnBookResult.postValue(response)
+        }
+    }
+    fun getBorrowedBooks(userId: String) {
+        viewModelScope.launch {
+            firebaseRepo.getBorrowedBooks(userId).collect { borrowedBooks ->
+                _borrowedBooks.value = borrowedBooks
+            }
+        }
+    }
     // Method to start observing hard copies of a book
     fun observeHardCopies(bookId: String) {
         viewModelScope.launch {
