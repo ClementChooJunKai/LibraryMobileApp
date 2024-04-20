@@ -24,6 +24,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
@@ -35,21 +36,22 @@ import com.example.team10mobileproject.Screen
 @Composable
 fun BottomBar(modifier: Modifier = Modifier, navController: NavController = rememberNavController()
 ) {
-
+    // Observing the current back stack entry to get the current route
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = currentBackStackEntry?.destination?.route
 
-//    val currentDestinationRoute = navController.currentDestination?.route // Using this to store current page to keep track.
+    val currentDestinationRoute = navController.currentDestination?.route
 
-    Log.d("CurrentNavpath", "Current destination: $currentRoute")
 
+    // Defining the navigation items with their corresponding routes and icons
     val navItems = listOf(
         Screen.Homepage.route to "home",
-        Screen.ShelfScreen.route to "magnifyingglass", // This ShelfScreen should be replaced to search page or smthing.
+        Screen.LibraryCollectionScreen.route to "magnifyingglass", // This ShelfScreen should be replaced to search page or smthing.
         Screen.BorrowScreen.route to "library",
         Screen.SettingScreen.route to "profile" // @Jace, change this Screen.ShelfScreen to the path of profile/settings page.
     )
 
+    // A Box composable that fills the maximum size, containing the navigation bar and a QR scanner button
     Box(modifier = Modifier.fillMaxSize()) {
         Row(
             modifier = modifier
@@ -60,14 +62,19 @@ fun BottomBar(modifier: Modifier = Modifier, navController: NavController = reme
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-
+            // Spacer to align the navigation items to the center
             Spacer(modifier = Modifier.width(0.dp))
+            // Iterating over each navigation item to create an IconButton for it
             navItems.forEach { (route, icon) ->
                 Row(modifier=modifier ,verticalAlignment = Alignment.CenterVertically) {
+                    // Determining if the current route matches the navigation item's route
                     val isSelected = currentRoute == route
+                    // Adjusting the icon based on whether the navigation item is selected
                     val iconResource = if (isSelected) "${icon}filled" else icon
 
-                    IconButton(onClick = { navController.navigate(route) }) {
+                    // Creating an IconButton for the navigation item
+                    IconButton(onClick = { navController.navigate(route) },
+                        modifier = Modifier.testTag("${iconResource}Icon") ) {
                         Icon(
                             painter = painterResource(id = getIconResourceId(iconResource)),
                             contentDescription = route,
@@ -77,9 +84,11 @@ fun BottomBar(modifier: Modifier = Modifier, navController: NavController = reme
                     }
                 }
             }
+            // Spacer to align the navigation items to the center
             Spacer(modifier = Modifier.width(0.dp))
         }
 
+        // A QR scanner button placed at the bottom center of the screen
         IconButton(
             onClick = {navController.navigate(Screen.QrScanner.route)} ,
             modifier = Modifier
@@ -88,19 +97,18 @@ fun BottomBar(modifier: Modifier = Modifier, navController: NavController = reme
                 .background(MaterialTheme.colorScheme.onSecondary)
                 .align(Alignment.BottomCenter)
                 .padding(10.dp)
-
         ) {
             Icon(
                 painter = painterResource(id = R.drawable.qr),
                 contentDescription = "home",
                 tint = Color.Black,
                 modifier = Modifier.size(25.dp)
-
             )
         }
     }
 }
 
+// A helper function to get the resource ID of an icon based on its name
 @Composable
 fun getIconResourceId(icon: String): Int {
     return when (icon) {

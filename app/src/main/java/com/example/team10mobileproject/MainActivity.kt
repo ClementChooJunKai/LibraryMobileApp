@@ -33,7 +33,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             Team10MobileProjectTheme {
-                val firebaseRepo = FirebaseRepo()
+                val firebaseRepo = FirebaseRepo(applicationContext)
                 val viewModelFactory = FirebaseViewModelFactory(firebaseRepo)
                 val viewModel = ViewModelProvider(this, viewModelFactory)[FirebaseViewModel::class.java]
                 val navController = rememberNavController()

@@ -1,21 +1,38 @@
 package com.example.team10mobileproject.Screens
 
+import ImageWithGridOverlay
+import ShowPopup
+import android.util.Log
 import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.livedata.observeAsState
@@ -25,22 +42,22 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
-import androidx.lifecycle.Observer
 import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
 import com.example.team10mobileproject.R
+import com.example.team10mobileproject.Repo.Book
 import com.example.team10mobileproject.ViewModel.FirebaseViewModel
 import com.example.team10mobileproject.ui.theme.MontserratFontFamily
 import loadNetworkImage
-import java.util.UUID
 
 
 val images = listOf(
@@ -53,9 +70,40 @@ val images = listOf(
 fun BookDetails(modifier: Modifier = Modifier,
                 navController: NavController = rememberNavController(),
                 viewModel: FirebaseViewModel) {
+    var showPopupOthers by remember { mutableStateOf(false) }
     var showPopup by remember { mutableStateOf(false) }
-
+    var showPopupMap by remember { mutableStateOf(false) }
     val selectedBook by viewModel.selectedBook.observeAsState()
+    val location by viewModel.location.observeAsState(Pair(0, 0)) // Default value is (0, 0)
+    val wishlistBooks by viewModel.wishlistedBooks.observeAsState(emptyList())
+    val course by viewModel.course.observeAsState(initial = "")
+    val isInWishlist = wishlistBooks.any { it.Title == selectedBook?.Title }
+    var books by remember(viewModel) {
+        mutableStateOf<List<Book>>(emptyList())
+    }
+
+    LaunchedEffect(Unit) {
+        viewModel.getWishlistedBooks()
+        viewModel.getCourse()
+    }
+    LaunchedEffect(Unit) {
+        selectedBook?.let { viewModel.observeBookLocation(it.Title) }
+    }
+    LaunchedEffect(key1 = course) {
+        viewModel.retrieveBookOnCourse(
+            course,
+            onSuccess = { retrievedBooks ->
+                // Update the list of books when retrieval is successful
+                Log.d("Firebase", "Retrieved books: $retrievedBooks")
+                books = retrievedBooks
+            },
+            onFailure = { error ->
+                // Handle failure (e.g., show error message)
+                Log.e("Firebase", "Failed to retrieve books: $error")
+            }
+        )
+
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
 
@@ -64,6 +112,7 @@ fun BookDetails(modifier: Modifier = Modifier,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(20.dp)
+                .testTag("BookDetailsLazyColumn")
         ) {
             item {
                 // Use the Header composable at the top
@@ -89,11 +138,11 @@ fun BookDetails(modifier: Modifier = Modifier,
                                 modifier = Modifier.size(200.dp)
                             )
                         }
-                        IconButton(onClick = { selectedBook?.let { viewModel.markBookAsFavorite(it) } }) {
+                        IconButton(onClick = { selectedBook?.let { viewModel.markBookAsFavorite(it) } },modifier = Modifier.testTag("WishlistIcon")) {
                             Icon(
                                 imageVector = Icons.Default.FavoriteBorder,
                                 contentDescription = "Mark as favorite",
-                                tint = if (viewModel.heartSuccess.value) Color.Red else Color.Unspecified
+                                tint = if (isInWishlist) Color.Red else Color.Unspecified
                             )
                         }
                     }
@@ -129,17 +178,29 @@ fun BookDetails(modifier: Modifier = Modifier,
                         )
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Spacer(modifier = Modifier.width(120.dp)) // Add some horizontal space
+                        Spacer(modifier = Modifier.width(50.dp)) // Add some horizontal space
                         Button(
-                            onClick = { showPopup = true },
+                            onClick = { showPopupOthers = true },
                             modifier = Modifier
                                 .padding(16.dp)
+                                .testTag("BorroWButton")
                                 .background(
                                     color = MaterialTheme.colorScheme.primary,
                                     shape = RoundedCornerShape(8.dp)
                                 )
                         ) {
                             Text(text = "Borrow", color = Color.White)
+                        }
+                        Button(
+                            onClick = { showPopupMap = true },
+                            modifier = Modifier
+                                .padding(10.dp)
+                                .background(
+                                    color = MaterialTheme.colorScheme.primary,
+                                    shape = RoundedCornerShape(8.dp)
+                                )
+                        ) {
+                            Text(text = "Location", color = Color.White)
                         }
                     }
 
@@ -162,13 +223,39 @@ fun BookDetails(modifier: Modifier = Modifier,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     contentPadding = PaddingValues(horizontal = 16.dp)
                 ) {
-                    items(images.size) { index ->
-                        Image(
-                            painter = painterResource(id = images[index]),
-                            contentDescription = null,
-                            modifier = Modifier.size(150.dp)
-                        )
+                    itemsIndexed(books) { index, book ->
+                        Box(modifier = Modifier.clickable {
+                            // Update the selectedBook state with the clicked book
+                            viewModel.updateSelectedBook(book)
+                            showPopup = true
+                        }) {
+                            Card(
+                                modifier = Modifier.height(150.dp),
+                                elevation = CardDefaults.cardElevation(
+                                    defaultElevation = 8.dp
+                                )
+                            ) {
+                                // Assuming `imageUrl` is the property of the Book class
+                                Image(
+                                    painter = loadNetworkImage(book.Url),
+                                    contentDescription = null,
+                                    modifier = Modifier
+                                        .width(100.dp)
+                                        .height(150.dp),
+                                    contentScale = ContentScale.FillBounds
+                                )
+                            }
+                        }
                     }
+                }
+                if (showPopup) {
+                    ShowPopup(
+                        viewModel = viewModel,
+                        navController = navController,
+                        sid = viewModel.sid, // Corrected here
+                        book = selectedBook ?: Book("", "", "",""), // Use the selectedBook state
+                        onDismiss = { showPopup = false }
+                    )
                 }
                 Spacer(modifier = Modifier.height(8.dp))
 
@@ -181,18 +268,24 @@ fun BookDetails(modifier: Modifier = Modifier,
             )
 
             // Show the popup if the state is set to true
-            if (showPopup) {
+            if (showPopupOthers) {
                 ShowBorrowPopup(
-                    showPopup = showPopup,
-                    onDismiss = { showPopup = false },
+                    showPopup = showPopupOthers,
+                    onDismiss = { showPopupOthers = false },
                     onBorrowTypeSelected = { type ->
-                        showPopup = false
+                        showPopupOthers = false
                     },
                     selectedBook?.Title,
                     viewModel
 
                 )
             }
+        if (showPopupMap) {
+            ImageWithGridOverlay(showDialog = showPopupMap,
+                onClose = { showPopupMap = false },
+                xPosition = location.first, yPosition = location.second)
+
+        }
 
     }
 }
@@ -275,7 +368,7 @@ fun ShowBorrowPopup(
                                 fontSize = 16.sp,
                                 color = Color.Black
                             )
-                            Button(onClick = {
+                            Button(modifier =Modifier.testTag("Virtual"), onClick={
                                 if (title != null) {
                                     viewModel.borrowBook(title, "soft")
 

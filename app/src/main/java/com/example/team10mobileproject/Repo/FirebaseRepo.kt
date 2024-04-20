@@ -1,7 +1,11 @@
 package com.example.team10mobileproject.Repo
 
-import android.annotation.SuppressLint
+import android.content.Context
 import android.util.Log
+import androidx.work.Data
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
+import com.example.team10mobileproject.Notification.BookExpiryWorker
 import com.example.team10mobileproject.ViewModel.Response
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.DataSnapshot
@@ -14,16 +18,16 @@ import com.google.firebase.ktx.Firebase
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.callbackFlow
-import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.tasks.await
-import kotlinx.coroutines.flow.Flow
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import java.util.UUID
+import java.util.concurrent.TimeUnit
+
 
 typealias SignUpResponse = Response<Boolean>
 typealias SendEmailVerificationResponse = Response<Boolean>
@@ -38,7 +42,9 @@ data class Book(
     val Url: String = "",
     val Course: String = "",
     val Description: String = "",
-
+    val hardCopies: Int = 0,
+    val softCopies: Int = 0,
+    val Pdf: String ="",
 ) {
     // No-argument constructor
     constructor() : this("", "", "","")
@@ -51,26 +57,113 @@ data class BorrowBook(
     val BorrowDate: String ="",
     val ExpiryDate: String ="",
     val copyType: String ="",
+    val Pdf: String ="",
 
 ) {
     // No-argument constructor
     constructor() : this("", "", "","","","")
 }
-class FirebaseRepo {
+class FirebaseRepo(private val context: Context) {
 
     private var auth: FirebaseAuth = FirebaseAuth.getInstance()
     private val db = Firebase.database("https://mobileproject-63310-default-rtdb.asia-southeast1.firebasedatabase.app/")
     private val accountRef = db.getReference("Account")
 
+    private fun scheduleNotificationForBook(userId: String, uniqueBookId: String, expiryDateLong: Long) {
+        val data = Data.Builder()
+            .putString("userId", userId)
+            .putString("uniqueBookId", uniqueBookId)
+            .build()
+
+        val request = OneTimeWorkRequestBuilder<BookExpiryWorker>()
+            .setInputData(data)
+            .setInitialDelay(expiryDateLong, TimeUnit.MILLISECONDS)
+            .build()
+
+        WorkManager.getInstance(context).enqueue(request)
+    }
+    fun getShelfBooks(shelfNo: Int): Flow<List<Book>> = callbackFlow {
+        val shelfRef = db.getReference("Shelf").child(shelfNo.toString())
+
+        val listener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val shelfBooks = mutableListOf<Book>()
+
+                snapshot.children.forEach { bookSnapshot ->
+                    val title = bookSnapshot.getValue(String::class.java) ?: ""
+                    if (title.isNotEmpty()) {
+                        // Query the Firebase database for the book details using the title
+                        val bookRef = db.getReference("Books").orderByChild("Title").equalTo(title)
+                        bookRef.addListenerForSingleValueEvent(object : ValueEventListener {
+                            override fun onDataChange(bookSnapshot: DataSnapshot) {
+                                bookSnapshot.children.forEach { bookDetailSnapshot ->
+                                    val url = bookDetailSnapshot.child("Url").getValue(String::class.java) ?: ""
+                                    val course = bookDetailSnapshot.child("Course").getValue(String::class.java) ?: ""
+                                    val description = bookDetailSnapshot.child("Description").getValue(String::class.java) ?: ""
+
+                                    val book = Book(title, url, course, description)
+                                    shelfBooks.add(book)
+                                }
+                                trySend(shelfBooks)
+                            }
+
+                            override fun onCancelled(error: DatabaseError) {
+                                close(Exception("Failed to retrieve book details: ${error.message}"))
+                            }
+                        })
+                    }
+                }
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                close(Exception("Failed to retrieve wishlisted books: ${error.message}"))
+            }
+        }
+
+        shelfRef.addValueEventListener(listener)
+
+        awaitClose {
+            shelfRef.removeEventListener(listener)
+        }
+    }
+
+    fun getWishlistedBooks(userId: String): Flow<List<Book>> = callbackFlow {
+        val wishlistRef = db.getReference("Account").child(userId).child("Wishlist")
+        val Book = db.getReference("Account").child(userId).child("Wishlist")
+        val listener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val wishlistedBooks = mutableListOf<Book>()
+
+                snapshot.children.forEach { bookSnapshot ->
+                    val title = bookSnapshot.child("title").getValue(String::class.java) ?: ""
+                    val url = bookSnapshot.child("url").getValue(String::class.java) ?: ""
+                    val course = bookSnapshot.child("course").getValue(String::class.java) ?: ""
+                    val description = bookSnapshot.child("description").getValue(String::class.java) ?: ""
 
 
+                    val book = Book(title, url, course, description )
+                    wishlistedBooks.add(book)
+                }
+
+                trySend(wishlistedBooks)
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                close(Exception("Failed to retrieve wishlisted books: ${error.message}"))
+            }
+        }
+
+        wishlistRef.addValueEventListener(listener)
+
+        awaitClose {
+            wishlistRef.removeEventListener(listener)
+        }
+    }
     suspend fun markAsFavorite(userId: String, book: Book) {
         // Construct the path to the user's wishlist
         val wishlistRef = db.getReference("Account").child(userId).child("Wishlist")
 
-        // Create a unique ID for the book in the wishlist
-        // Assuming you have a way to generate a consistent ID for each book
-        // For simplicity, let's use the book's title as the ID
+
         val bookId = book.Title // This should be unique for each book
 
         // Check if the book is already in the wishlist
@@ -101,42 +194,50 @@ class FirebaseRepo {
             override fun onDataChange(snapshot: DataSnapshot) {
                 Log.d("getBorrowedBooks", "Data changed for user: $userId")
 
-                val borrowedBooks = mutableListOf<BorrowBook>()
+                // Check if the BorrowedBooks node exists
+                if (snapshot.exists()) {
+                    val borrowedBooks = mutableListOf<BorrowBook>()
 
-                snapshot.children.forEach { borrowedBookSnapshot ->
-                    val bookId = borrowedBookSnapshot.key?.split("-")?.firstOrNull()
-                    val copyType = borrowedBookSnapshot.key?.split("-")?.lastOrNull()
+                    snapshot.children.forEach { borrowedBookSnapshot ->
+                        val bookId = borrowedBookSnapshot.key?.split("-")?.firstOrNull()
+                        val copyType = borrowedBookSnapshot.key?.split("-")?.lastOrNull()
 
-                    if (bookId != null && copyType != null) {
-                        Log.d("getBorrowedBooks", "Processing bookId: $bookId, copyType: $copyType")
+                        if (bookId != null && copyType != null) {
+                            Log.d("getBorrowedBooks", "Processing bookId: $bookId, copyType: $copyType")
 
-                        val bookRef = db.getReference("Books").child(bookId)
-                        bookRef.addListenerForSingleValueEvent(object : ValueEventListener {
-                            override fun onDataChange(bookSnapshot: DataSnapshot) {
-                                Log.d("getBorrowedBooks", "Book details retrieved for bookId: $bookId")
+                            val bookRef = db.getReference("Books").child(bookId)
+                            bookRef.addListenerForSingleValueEvent(object : ValueEventListener {
+                                override fun onDataChange(bookSnapshot: DataSnapshot) {
+                                    Log.d("getBorrowedBooks", "Book details retrieved for bookId: $bookId")
 
-                                val title = bookSnapshot.child("Title").getValue(String::class.java) ?: ""
-                                val url = bookSnapshot.child("Url").getValue(String::class.java) ?: ""
-                                val course = bookSnapshot.child("Course").getValue(String::class.java) ?: ""
-                                val description = bookSnapshot.child("Description").getValue(String::class.java) ?: ""
-                                val borrowDate = borrowedBookSnapshot.child("BorrowDate").getValue(String::class.java) ?: ""
-                                val expiryDate = borrowedBookSnapshot.child("ExpiryDate").getValue(String::class.java) ?: ""
-                                val book = BorrowBook(title, url, course, description, borrowDate, expiryDate, copyType)
-                                borrowedBooks.add(book)
+                                    val title = bookSnapshot.child("Title").getValue(String::class.java) ?: ""
+                                    val url = bookSnapshot.child("Url").getValue(String::class.java) ?: ""
+                                    val course = bookSnapshot.child("Course").getValue(String::class.java) ?: ""
+                                    val pdf = bookSnapshot.child("Pdf").getValue(String::class.java) ?: ""
+                                    val description = bookSnapshot.child("Description").getValue(String::class.java) ?: ""
+                                    val borrowDate = borrowedBookSnapshot.child("BorrowDate").getValue(String::class.java) ?: ""
+                                    val expiryDate = borrowedBookSnapshot.child("ExpiryDate").getValue(String::class.java) ?: ""
+                                    val book = BorrowBook(title, url, course, description, borrowDate, expiryDate, copyType, pdf)
+                                    borrowedBooks.add(book)
 
-                                // Check if all books have been processed
-                                if (borrowedBooks.size.toLong() == snapshot.childrenCount) {
-                                    Log.d("getBorrowedBooks", "All books processed for user: $userId")
-                                    trySend(borrowedBooks)
+                                    // Check if all books have been processed
+                                    if (borrowedBooks.size.toLong() == snapshot.childrenCount) {
+                                        Log.d("getBorrowedBooks", "All books processed for user: $userId")
+                                        trySend(borrowedBooks)
+                                    }
                                 }
-                            }
 
-                            override fun onCancelled(error: DatabaseError) {
-                                Log.e("getBorrowedBooks", "Failed to retrieve book details: ${error.message}")
-                                close(Exception("Failed to retrieve book details: ${error.message}"))
-                            }
-                        })
+                                override fun onCancelled(error: DatabaseError) {
+                                    Log.e("getBorrowedBooks", "Failed to retrieve book details: ${error.message}")
+                                    close(Exception("Failed to retrieve book details: ${error.message}"))
+                                }
+                            })
+                        }
                     }
+                } else {
+                    // If the BorrowedBooks node does not exist, send an empty list
+                    Log.d("getBorrowedBooks", "BorrowedBooks node does not exist for user: $userId")
+                    trySend(emptyList())
                 }
             }
 
@@ -153,6 +254,7 @@ class FirebaseRepo {
             borrowedBooksRef.removeEventListener(listener)
         }
     }
+
     fun returnBook(userId: String, bookId: String, copyType: String, onComplete: (Response<Boolean>) -> Unit) {
         // Remove the book from the user's borrowed books
         val borrowedBooksRef = db.getReference("Account").child(userId).child("BorrowedBooks")
@@ -180,6 +282,24 @@ class FirebaseRepo {
             }
         })
     }
+    fun observeLocation(bookId: String): Flow<Pair<Int, Int>> {
+        return callbackFlow {
+            val bookRef = db.getReference("Books").child(bookId)
+            val listener = bookRef.addValueEventListener(object : ValueEventListener {
+                override fun onDataChange(snapshot: DataSnapshot) {
+                    val locationX = snapshot.child("Location").child("x").getValue(Int::class.java) ?: 0
+                    val locationY = snapshot.child("Location").child("y").getValue(Int::class.java) ?: 0
+                    trySend(Pair(locationX, locationY))
+                }
+
+                override fun onCancelled(error: DatabaseError) {
+                    close(error.toException())
+                }
+            })
+
+            awaitClose { bookRef.removeEventListener(listener) }
+        }.stateIn(CoroutineScope(Dispatchers.IO), SharingStarted.Lazily, Pair(0, 0))
+    }
     // Function to get the hard copies of a book as a flow
     fun observeHardCopies(bookId: String): Flow<Int> {
         return callbackFlow {
@@ -187,6 +307,7 @@ class FirebaseRepo {
             val listener = bookRef.addValueEventListener(object : ValueEventListener {
                 override fun onDataChange(snapshot: DataSnapshot) {
                     val hardCopies = snapshot.child("hardCopies").getValue(Int::class.java) ?: 0
+
                     trySend(hardCopies)
                 }
 
@@ -248,6 +369,10 @@ class FirebaseRepo {
                 )
 
                 borrowedBooksRef.child(uniqueBookId).setValue(borrowedBookData).await()
+                val expiryDateLong = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).parse(expiryDate)?.time
+                if (expiryDateLong != null) {
+                    scheduleNotificationForBook(userId, bookId, expiryDateLong)
+                }
 
                 Response.Success(true)
             } else {
@@ -256,6 +381,42 @@ class FirebaseRepo {
         } catch (e: Exception) {
             Response.Failure(e)
         }
+    }
+
+    suspend fun retrieveBooksOnCourse(
+        accountCourse: String, // Add this parameter
+        onSuccess: (List<Book>) -> Unit,
+        onFailure: (DatabaseError) -> Unit
+    ) {
+        val booksRef = db.getReference("Books")
+
+        // Attach a ValueEventListener to retrieve the data
+        booksRef.addListenerForSingleValueEvent(object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val books = mutableListOf<Book>()
+
+                for (bookSnapshot in snapshot.children) {
+                    val title = bookSnapshot.child("Title").getValue(String::class.java) ?: ""
+                    val imageUrl = bookSnapshot.child("Url").getValue(String::class.java) ?: ""
+                    val course = bookSnapshot.child("Course").getValue(String::class.java) ?: ""
+                    val description = bookSnapshot.child("Description").getValue(String::class.java) ?: ""
+
+                    // Only add the book if the course matches the account's course
+                    if (course == accountCourse) {
+                        val book = Book(title, imageUrl, course, description)
+                        books.add(book)
+                    }
+                }
+
+                // Pass the filtered list of books to the onSuccess callback
+                onSuccess(books)
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                // Pass the DatabaseError object to the onFailure callback
+                onFailure(error)
+            }
+        })
     }
 
     // Function to retrieve all books from Firebase Realtime Database
@@ -355,6 +516,52 @@ class FirebaseRepo {
         accountRef.child(sid).child("Name").setValue(username)
         accountRef.child(sid).child("Password").setValue(password)
 
+    }
+    fun getStudent(sid: String = "", onNameRetrieved: (String?) -> Unit) {
+        // Assuming accountRef is a DatabaseReference pointing to your Firebase Realtime Database
+        val studentRef = accountRef.child(sid)
+
+        // Add a listener to retrieve the Sid and Name
+        studentRef.addListenerForSingleValueEvent(object : ValueEventListener {
+            override fun onDataChange(dataSnapshot: DataSnapshot) {
+                // This method is called once with the initial value and again
+                // whenever data at this location is updated.
+                val sid = dataSnapshot.child("Sid").getValue(String::class.java)
+                val name = dataSnapshot.child("Name").getValue(String::class.java)
+
+                // Log the retrieved data
+                Log.d("FirebaseData", "Sid: $sid, Name: $name")
+                // Invoke the callback with the retrieved name
+                onNameRetrieved(name)
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                // Failed to read value
+                Log.w("FirebaseError", "Failed to read student data", error.toException())
+                // Invoke the callback with null to indicate an error
+                onNameRetrieved(null)
+            }
+        })
+    }
+    fun getCourse(sid: String): Flow<String> = callbackFlow {
+        val courseRef = accountRef.child(sid).child("Course")
+
+        val listener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val course = snapshot.getValue(String::class.java) ?: ""
+                trySend(course)
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                close(Exception("Failed to retrieve course: ${error.message}"))
+            }
+        }
+
+        courseRef.addListenerForSingleValueEvent(listener)
+
+        awaitClose {
+            courseRef.removeEventListener(listener)
+        }
     }
 
     fun recentlyViewed(bookName: String, sid: String) {

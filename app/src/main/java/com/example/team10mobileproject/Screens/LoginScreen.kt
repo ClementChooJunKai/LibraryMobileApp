@@ -5,6 +5,9 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+
+
+
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -21,9 +24,14 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.material3.Icon
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
 import com.example.team10mobileproject.ViewModel.FirebaseViewModel
@@ -31,17 +39,20 @@ import com.example.team10mobileproject.R
 import com.example.team10mobileproject.Screen
 
 import com.example.team10mobileproject.ViewModel.Response
+import com.example.team10mobileproject.ui.theme.gradientBackgroundBrush
 import kotlinx.coroutines.launch
 
 
+/**
+ * Composable function for displaying the login screen.
+ * @param navController NavController used for navigation within the app.
+ * @param viewModel ViewModel for managing data and business logic.
+ */
 @SuppressLint("UnrememberedMutableState")
 @Composable
 fun LoginScreen(
-
-
     navController: NavController = rememberNavController(),
     viewModel: FirebaseViewModel,
-
 ) {
 
     val context = LocalContext.current // Assuming you are using Compose
@@ -57,25 +68,51 @@ fun LoginScreen(
         navController.popBackStack()
         navController.navigate(Screen.LoginScreen.route)
     })
-    Box(modifier = Modifier.background(MaterialTheme.colorScheme.primary)) {
+
+    Box(modifier = Modifier.background(gradientBackgroundBrush(true))) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            Spacer(modifier = Modifier.height(0.dp))
-            Image(
-                painter = painterResource(id = R.drawable.readify),
-                contentDescription = null,
-                modifier = Modifier.size(350.dp),
-                colorFilter = ColorFilter.tint(Color.White)
-            )
+
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .fillMaxWidth()
+
+
+            ) {
+                // Display the image
+                Image(
+                    painter = painterResource(id = R.drawable.librarylogin),
+                    contentDescription = null,
+                    modifier = Modifier
+                        .fillMaxWidth()
+
+                        .height(350.dp) // Adjust the height as needed
+                        .blur(radiusX = 5.dp, radiusY = 5.dp),
+                    contentScale = ContentScale.FillWidth
+
+                )
+                // Display the SVG logo on top of the image
+                Image(
+                    painter = painterResource(id = R.drawable.readifylogo), // Replace with your SVG resource
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(350.dp)
+                        .padding(16.dp),
+
+                    colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.secondary)
+
+                )
+            }
 
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(topStart = 30.dp, topEnd = 30.dp))
                     .background(MaterialTheme.colorScheme.secondary)
                     .fillMaxSize()
-                    .padding(15.dp)
+                    .padding(horizontal = 15.dp)
             ) {
                 Column(Modifier.padding(15.dp)) {
                     TabRow(
@@ -87,6 +124,7 @@ fun LoginScreen(
                         Tab(
                             selected = tabController == 0,
                             onClick = { tabController = 0 },
+                            modifier = Modifier.testTag("LoginTab"),
                             content = {
                                 Text(text = "Login", modifier = Modifier.padding(vertical = 8.dp))
                             }
@@ -94,6 +132,7 @@ fun LoginScreen(
                         Tab(
                             selected = tabController == 1,
                             onClick = { tabController = 1 },
+                            modifier = Modifier.testTag("SignUpTab"),
                             content = {
                                 Text(text = "Sign Up", modifier = Modifier.padding(vertical = 8.dp))
                             }
@@ -108,7 +147,8 @@ fun LoginScreen(
                             onValueChange = { inputSid = it },
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(8.dp),
+                                .padding(8.dp)
+                                .testTag("SID"),
                             leadingIcon = {
                                 Icon(
                                     imageVector = Icons.Filled.Person,
@@ -132,7 +172,8 @@ fun LoginScreen(
                             },
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(8.dp),
+                                .padding(8.dp)
+                                .testTag("Password"),
                             leadingIcon = {
                                 Icon(
                                     imageVector = Icons.Filled.Lock,
@@ -160,10 +201,11 @@ fun LoginScreen(
                             colors  = ButtonDefaults.buttonColors(contentColor = Color.White),
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(50.dp),
+                                .height(50.dp)
+                                .testTag("Login"),
                             enabled = inputSid.isNotEmpty() && password.isNotEmpty()
                         ) {
-                            Text("Login")
+                            Text("Login" )
                         }
                         Spacer(modifier = Modifier.height(16.dp))
                         Button(
@@ -217,31 +259,32 @@ fun LoginScreen(
                             }
 
                         }
-                            Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
 
-                            Text(
-                                text = errorMessage,
-                                color = Color.Red,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 16.dp)
-                            )
-                        } else {
-                            // Sign up fields
-                            TextField(
-                                value = username,
-                                onValueChange = { username = it },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(8.dp),
-                                leadingIcon = {
-                                    Icon(
-                                        imageVector = Icons.Filled.Person,
-                                        contentDescription = null
-                                    )
-                                },
-                                label = { Text("Name") }
-                            )
+                        Text(
+                            text = errorMessage,
+                            color = Color.Red,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp)
+                        )
+                    } else {
+                        // Sign up fields
+                        TextField(
+                            value = username,
+                            onValueChange = { username = it },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(8.dp)
+                                .testTag("SignUpUsername"),
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Filled.Person,
+                                    contentDescription = null
+                                )
+                            },
+                            label = { Text("Name") }
+                        )
 
                         TextField(
                             value = inputSid,
@@ -255,7 +298,9 @@ fun LoginScreen(
                             },
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(8.dp),
+                                .padding(8.dp)
+                                .testTag("SignUpSid")
+                            ,
                             leadingIcon = {
                                 Icon(
                                     imageVector = Icons.Filled.Person,
@@ -266,71 +311,74 @@ fun LoginScreen(
                             keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Number)
                         )
 
-                            TextField(
-                                value = password,
-                                onValueChange = { password = it },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(8.dp),
-                                leadingIcon = {
-                                    Icon(
-                                        imageVector = Icons.Filled.Lock,
-                                        contentDescription = null
-                                    )
-                                },
-                                label = { Text("Password") },
-                                visualTransformation = PasswordVisualTransformation(),
-                                keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Password)
-                            )
+                        TextField(
+                            value = password,
+                            onValueChange = { password = it },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(8.dp)
+                                .testTag("SignUpPassword"),
 
-                            Spacer(modifier = Modifier.height(16.dp))
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Filled.Lock,
+                                    contentDescription = null
+                                )
+                            },
+                            label = { Text("Password") },
+                            visualTransformation = PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Password)
+                        )
 
-                            Button(
-                                onClick = { signUpClicked = true },
-                                colors  = ButtonDefaults.buttonColors(contentColor = Color.White),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(50.dp),
-                                enabled = username.isNotEmpty() && inputSid.length == 7 && password.isNotEmpty() // Add other sign-up field validations
-                            ) {
-                                Text("Sign Up")
-                            }
+                        Spacer(modifier = Modifier.height(16.dp))
 
-                            if (signUpClicked) {
+                        Button(
+                            onClick = { signUpClicked = true },
+                            colors  = ButtonDefaults.buttonColors(contentColor = Color.White),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(50.dp)
+                                .testTag("SignUpButton"),
+                            enabled = username.isNotEmpty() && inputSid.length == 7 && password.isNotEmpty() // Add other sign-up field validations
+                        ) {
+                            Text("Sign Up")
+                        }
 
-                                LaunchedEffect(Unit) {
-                                    // Call firebaseSignUpWithEmailAndPassword and wait for its result
-                                    viewModel.firebaseSignUpWithEmailAndPassword(
-                                        inputSid + "@sit.singaporetech.edu.sg",
-                                        password
-                                    )
+                        if (signUpClicked) {
 
-                                    // Process the result
-                                    when (val signUpResponse = viewModel.signUpResponse) {
+                            LaunchedEffect(Unit) {
+                                // Call firebaseSignUpWithEmailAndPassword and wait for its result
+                                viewModel.firebaseSignUpWithEmailAndPassword(
+                                    inputSid + "@sit.singaporetech.edu.sg",
+                                    password
+                                )
 
-                                        is Response.Success -> {
+                                // Process the result
+                                when (val signUpResponse = viewModel.signUpResponse) {
 
-                                            viewModel.registerStudent(username, password, inputSid)
-                                            signUpClicked = false
-                                            Toast.makeText(
-                                                context,
-                                                "Sign-up Successfully!",
-                                                Toast.LENGTH_SHORT
-                                            ).show()
-                                        }
+                                    is Response.Success -> {
 
-                                        is Response.Failure -> signUpResponse.apply {
+                                        viewModel.registerStudent(username, password, inputSid)
+                                        signUpClicked = false
+                                        Toast.makeText(
+                                            context,
 
-                                            signUpClicked = false
-                                            Toast.makeText(
-                                                context,
-                                                "Sign-up failed: ${e.message}",
-                                                Toast.LENGTH_SHORT
-                                            ).show()
-                                        }
-
-
+                                            "Sign-up Successfully!",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
                                     }
+
+                                    is Response.Failure -> signUpResponse.apply {
+
+                                        signUpClicked = false
+                                        Toast.makeText(
+                                            context,
+                                            "Sign-up failed: ${e.message}",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
+
+
                                 }
                             }
                         }
@@ -339,6 +387,15 @@ fun LoginScreen(
             }
         }
     }
+}
+
+
+/**
+ * Composable function for displaying the forget password dialog.
+ * @param sid MutableState used to manage the SID input field.
+ * @param onDismiss Function to dismiss the dialog.
+ * @param viewModel ViewModel for managing data and business logic.
+ */
 @Composable
 fun ForgetPasswordDialog(
     sid: MutableState<String>, // Change this to MutableState<String>
@@ -361,22 +418,30 @@ fun ForgetPasswordDialog(
             )
         },
         confirmButton = {
-            Button(onClick = { coroutineScope.launch {
-                viewModel.sendPasswordResetEmail(sid.value + "@sit.singaporetech.edu.sg")
-            }
-                Toast.makeText(
-                    context,
-                    "Sent reset password email!!",
-                    Toast.LENGTH_SHORT
-                ).show()}) {
-                Text("Reset Password")
+            Row(  modifier = Modifier
+                .fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            )
+            {
+                Button(
+                    onClick = {
+                        coroutineScope.launch {
+                            viewModel.sendPasswordResetEmail(sid.value + "@sit.singaporetech.edu.sg")
+                        }
+                        Toast.makeText(
+                            context,
+                            "Sent reset password email!!",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    },
+                    colors  = ButtonDefaults.buttonColors(contentColor = Color.White)
+                )
+                {
+                    Text("Reset Password")
+                }
             }
         },
-        dismissButton = {
-            Button(onClick = onDismiss) {
-                Text("Cancel")
-            }
-        }
     )
 }
+
 

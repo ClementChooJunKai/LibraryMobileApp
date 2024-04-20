@@ -1,18 +1,40 @@
-
 import android.util.Log
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.livedata.observeAsState
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -20,6 +42,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -30,51 +53,60 @@ import androidx.compose.ui.window.Dialog
 import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
 import coil.compose.rememberAsyncImagePainter
-import com.example.team10mobileproject.Screens.BottomBar
-
-
-import com.example.team10mobileproject.R
 import com.example.team10mobileproject.Repo.Book
 import com.example.team10mobileproject.Screen
-
-
+import com.example.team10mobileproject.Screens.BottomBar
 import com.example.team10mobileproject.ViewModel.FirebaseViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 
-
+/**
+ * Loads an image from the network using the provided [url].
+ * @param url The URL of the image to be loaded.
+ * @return A [Painter] representing the loaded image.
+ */
 @Composable
 fun loadNetworkImage(url: String): Painter {
     return rememberAsyncImagePainter(url)
 }
 
-
+/**
+ * Composable function representing the homepage of the application.
+ * @param modifier Optional modifier for the layout.
+ * @param navController NavController used for navigation within the app.
+ * @param viewModel ViewModel for managing data and business logic.
+ */
 @Composable
 fun Homepage(
     modifier: Modifier = Modifier,
     navController: NavController = rememberNavController(),
     viewModel: FirebaseViewModel,
-
 ) {
+    // Observing recently viewed books from the view model
     val recentlyViewedBooks by viewModel.recentlyViewedBooks.observeAsState(initial = emptyList())
+
     // State to manage the visibility of the popup
     var showPopup by remember { mutableStateOf(false) }
-    var clickedBookIndex by remember { mutableStateOf(0) }
+    var clickedBookIndex by remember { mutableIntStateOf(0) }
     var selectedBook by remember { mutableStateOf<Book?>(null) }
+    val course by viewModel.course.observeAsState(initial = "")
     var books by remember(viewModel) {
         mutableStateOf<List<Book>>(emptyList())
     }
 
-    Log.d("SID_Value", "SID value: ${viewModel.sid.value}") // Log the value of sid
+    // Logging the value of sid
+    Log.d("SID_Value", "SID value: ${viewModel.sid.value}")
 
-
+    // Fetching recently viewed books and course information
     viewModel.getRecentlyViewedBooks(viewModel.sid.value)
     LaunchedEffect(key1 = Unit) {
         viewModel.getRecentlyViewedBooks(viewModel.sid.value)
+        viewModel.getCourse()
     }
-    LaunchedEffect(key1 = true) {
-        viewModel.retrieveAllBooks(
+    LaunchedEffect(key1 = course) {
+        viewModel.retrieveBookOnCourse(
+            course,
             onSuccess = { retrievedBooks ->
                 // Update the list of books when retrieval is successful
                 Log.d("Firebase", "Retrieved books: $retrievedBooks")
@@ -85,20 +117,19 @@ fun Homepage(
                 Log.e("Firebase", "Failed to retrieve books: $error")
             }
         )
-
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    // Main content of the homepage
+    Box(modifier = Modifier.fillMaxSize().testTag("Box1")) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = 15.dp)
         ) {
-            // Your content goes here
+            // Heading item and carousel slider
             Spacer(modifier = Modifier.height(30.dp))
-            HeadingItem(viewModel.sid)
+            HeadingItem(viewModel.sid, course)
             Spacer(modifier = Modifier.height(8.dp))
-
             Spacer(modifier = Modifier.height(5.dp))
             CarouselSlider(books) { index ->
                 // Update the state to show the popup and set the clicked book index
@@ -107,6 +138,7 @@ fun Homepage(
                 showPopup = true
             }
 
+            // Recommended books section
             RecommendedBooks(
                 recentlyViewedBooks = recentlyViewedBooks,
                 onBookClick = { book ->
@@ -116,27 +148,33 @@ fun Homepage(
             )
         }
 
-    // Align BottomBar directly to the bottom of the Box
-    BottomBar(
-        modifier = Modifier.align(Alignment.BottomCenter),
-        navController = navController
-    )
+        // Bottom bar aligned to the bottom of the screen
+        BottomBar(
+            modifier = Modifier.align(Alignment.BottomCenter),
+            navController = navController
+        )
     }
+
+    // Show the popup if the state is set to true
     if (showPopup) {
         ShowPopup(
             viewModel = viewModel,
             navController = navController,
             sid = viewModel.sid, // Corrected here
-            book = selectedBook ?: Book("", "", "",""), // Use the selectedBook state
+            book = selectedBook ?: Book("", "", "", ""), // Use the selectedBook state
             onDismiss = { showPopup = false }
         )
     }
-    }
+}
 
-    // Show the popup if the state is set to true
-
-
-
+/**
+ * Composable function for displaying a popup dialog with book details.
+ * @param viewModel ViewModel for managing data and business logic.
+ * @param navController NavController used for navigation within the app.
+ * @param sid MutableState containing the user's session ID.
+ * @param book Book object representing the selected book.
+ * @param onDismiss Callback function to dismiss the popup.
+ */
 @Composable
 fun ShowPopup(
     viewModel: FirebaseViewModel,
@@ -145,7 +183,10 @@ fun ShowPopup(
     book: Book,
     onDismiss: () -> Unit
 ) {
+    // Log the recently viewed book and update the session ID
     viewModel.recentlyViewed(book.Title, sid = sid.value)
+
+    // Display the popup dialog
     Dialog(onDismissRequest = onDismiss) {
         // Popup content
         Box(
@@ -153,7 +194,7 @@ fun ShowPopup(
                 .padding(16.dp)
                 .background(Color.White)
                 .size(500.dp)
-                .clip(RoundedCornerShape(8.dp))
+                .clip(RoundedCornerShape(30.dp))
         ) {
             Column(
                 modifier = Modifier
@@ -176,27 +217,33 @@ fun ShowPopup(
                         )
                     }
                     item {
-                        Text(
-                            text = "Description: ${book.Description}",
-                            style = TextStyle(fontSize = 18.sp, fontWeight = FontWeight.Bold),
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.padding(bottom = 8.dp)
+                        Image(
+                            painter = loadNetworkImage(book.Url),
+                            contentDescription = null,
+                            modifier = Modifier
+                                .width(240.dp)
+                                .height(320.dp),
+                            contentScale = ContentScale.FillBounds
                         )
                     }
                 }
 
                 Spacer(modifier = Modifier.height(16.dp)) // Add some space between the content and the buttons
+
+                // Buttons for reading more about the book and closing the popup
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceEvenly
                 ) {
-                    Button(onClick = {
+                    Button(modifier = Modifier.testTag("ReadMore"),onClick = {
+                        // Navigate to the book details screen
                         viewModel.setSelectedBook(book)
-                        navController.navigate(Screen.BookDetails.route) }) {
-                        Text("Read More")
+                        navController.navigate(Screen.BookDetails.route)
+                    }) {
+                        Text("Read More", color = Color.White)
                     }
                     Button(onClick = onDismiss) {
-                        Text("Close")
+                        Text("Close", color = Color.White)
                     }
                 }
             }
@@ -204,13 +251,19 @@ fun ShowPopup(
     }
 }
 
-
+/**
+ * Composable function for displaying a carousel slider of books.
+ * @param books List of books to be displayed in the carousel.
+ * @param onItemClick Callback function invoked when a book is clicked.
+ */
 @Composable
 private fun CarouselSlider(books: List<Book>, onItemClick: (Int) -> Unit) {
+    // State to track the current index of the carousel
     var index by remember { mutableStateOf(0) }
     val scrollState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
 
+    // Automatically scroll the carousel
     LaunchedEffect(key1 = true, block = {
         coroutineScope.launch {
             while (true) {
@@ -231,13 +284,12 @@ private fun CarouselSlider(books: List<Book>, onItemClick: (Int) -> Unit) {
     }
 
     Column(
-        modifier = Modifier.padding(5.dp)
+        modifier = Modifier.padding(10.dp)
     ) {
-
         Text(
             text = "For you",
             style = MaterialTheme.typography.titleLarge,
-            color = MaterialTheme.colorScheme.onPrimary,
+            color = MaterialTheme.colorScheme.onSecondary,
             modifier = Modifier.padding(bottom = 15.dp)
         )
         Box(modifier = Modifier) {
@@ -248,14 +300,14 @@ private fun CarouselSlider(books: List<Book>, onItemClick: (Int) -> Unit) {
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 itemsIndexed(books) { index, book ->
-                    Box(modifier = Modifier.clickable { onItemClick(index) }) {
+                    Box(modifier = Modifier.clickable { onItemClick(index) }.testTag("BookExample$index")) {
                         Card(
                             modifier = Modifier.height(150.dp),
                             elevation = CardDefaults.cardElevation(
                                 defaultElevation = 8.dp
                             )
                         ) {
-                            // Assuming `imageUrl` is the property of the Book class
+                            // Display the book cover image
                             Image(
                                 painter = loadNetworkImage(book.Url),
                                 contentDescription = null,
@@ -270,12 +322,13 @@ private fun CarouselSlider(books: List<Book>, onItemClick: (Int) -> Unit) {
             }
 
         }
+        // Display dot indicators for the carousel
         Box(
             modifier = Modifier
                 .width(70.dp)
                 .fillMaxWidth()
-                .align(Alignment.CenterHorizontally) // Center horizontally
-                .padding(top = 20.dp) // Add padding if needed
+                .align(Alignment.CenterHorizontally)
+                .padding(top = 20.dp)
         ) {
             DotIndicator(selectedIndex = index, totalItems = books.size) { newIndex ->
                 index = newIndex
@@ -284,10 +337,15 @@ private fun CarouselSlider(books: List<Book>, onItemClick: (Int) -> Unit) {
                 }
             }
         }
-
     }
 }
 
+/**
+ * Composable function for displaying dot indicators for the carousel slider.
+ * @param selectedIndex Index of the currently selected item in the carousel.
+ * @param totalItems Total number of items in the carousel.
+ * @param onDotClick Callback function invoked when a dot is clicked.
+ */
 @Composable
 private fun DotIndicator(selectedIndex: Int, totalItems: Int, onDotClick: (Int) -> Unit) {
     Row(
@@ -308,34 +366,45 @@ private fun DotIndicator(selectedIndex: Int, totalItems: Int, onDotClick: (Int) 
     }
 }
 
-
+/**
+ * Composable function for displaying the user's heading information.
+ * @param sid MutableState containing the user's session ID.
+ * @param course The current course information.
+ */
 @Composable
-fun HeadingItem(sid: MutableState<String>){
+fun HeadingItem(sid: MutableState<String>, course: String){
     Column {
+        // Display welcome message
         Text(
-            text = "Welcome ",
+            text = "WELCOME ",
             style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.ExtraBold,
             fontStyle = FontStyle.Normal,
+            fontSize = 30.sp,
             modifier = Modifier.padding(bottom =  8.dp)
+                .testTag("ID")
         )
         Spacer(modifier = Modifier.width(10.dp))
+        // Display user's session ID and course
         Text(
             text = sid.value +" !",
             style = MaterialTheme.typography.titleLarge,
             color = MaterialTheme.colorScheme.primary,
             fontStyle = FontStyle.Normal,
             modifier = Modifier.padding(bottom =  16.dp)
+                .testTag("ID")
         )
     }
+    // Display the course information
     Box(
         modifier = Modifier.shadow(
-            elevation = 5.dp, // Set the elevation of the shadow
-            shape = RoundedCornerShape(10.dp) // Set the shape of the shadow
+            elevation = 5.dp,
+            shape = RoundedCornerShape(10.dp)
         )
     ) {
         Text(
-            text = "Course: Computing Science",
-            style = MaterialTheme.typography.titleLarge,
+            text = "Course: $course",
+            style = MaterialTheme.typography.headlineSmall,
             modifier = Modifier
                 .padding(bottom = 4.dp)
                 .fillMaxWidth()
@@ -344,11 +413,12 @@ fun HeadingItem(sid: MutableState<String>){
                 .align(Alignment.Center)
         )
     }
-
-
-
 }
-
+/**
+ * Composable function for displaying a list of recommended books.
+ * @param recentlyViewedBooks List of recently viewed books to be displayed.
+ * @param onBookClick Callback function invoked when a book is clicked.
+ */
 @Composable
 fun RecommendedBooks(
     recentlyViewedBooks: List<Book>,
@@ -358,19 +428,23 @@ fun RecommendedBooks(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 6.dp)
-            .height(220.dp)
+            .height(240.dp)
     ) {
         Column(
             modifier = Modifier
                 .padding(10.dp)
                 .fillMaxWidth(),
         ) {
+            // Display the title for the section
             Text(
                 text = "Recently Viewed",
                 style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onPrimary,
+                color = MaterialTheme.colorScheme.onSecondary,
                 modifier = Modifier.padding(bottom = 5.dp)
             )
+
+            Spacer(modifier = Modifier.height(10.dp))
+            // Display the list of recently viewed books
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -385,6 +459,11 @@ fun RecommendedBooks(
     }
 }
 
+/**
+ * Composable function for displaying an individual book item.
+ * @param book The book to be displayed.
+ * @param onBookClick Callback function invoked when the book item is clicked.
+ */
 @Composable
 fun BookItem(book: Book, onBookClick: (Book) -> Unit) {
     Box(
@@ -395,6 +474,7 @@ fun BookItem(book: Book, onBookClick: (Book) -> Unit) {
             .background(Color.LightGray)
             .clickable { onBookClick(book) }
     ) {
+        // Display the book cover image
         Image(
             painter = loadNetworkImage(book.Url),
             contentDescription = "Book Cover",
@@ -403,6 +483,7 @@ fun BookItem(book: Book, onBookClick: (Book) -> Unit) {
         )
     }
 }
+
 
 
 

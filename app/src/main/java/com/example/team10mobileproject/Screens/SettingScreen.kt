@@ -1,5 +1,8 @@
 package com.example.team10mobileproject.Screens
 
+import android.Manifest
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -12,12 +15,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -26,7 +29,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
@@ -35,11 +37,35 @@ import com.example.team10mobileproject.R
 import com.example.team10mobileproject.Screen
 import com.example.team10mobileproject.ViewModel.FirebaseViewModel
 
+/**
+ * Composable function for displaying the setting screen.
+ * @param modifier The modifier for the setting screen.
+ * @param navController The navigation controller.
+ * @param viewModel The view model to manage Firebase data.
+ */
 @Composable
 fun SettingScreen(modifier: Modifier = Modifier,
                    navController: NavController = rememberNavController(),
                            viewModel: FirebaseViewModel
 ) {
+    val requestPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) {
+
+    }
+
+    DisposableEffect(Unit) {
+        requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        onDispose {
+
+        }
+    }
+
+    LaunchedEffect(key1 = Unit) {
+        viewModel.getStudentName()
+
+
+    }
     Box(modifier = Modifier
         .fillMaxSize()
         .background(
@@ -54,6 +80,11 @@ fun SettingScreen(modifier: Modifier = Modifier,
     }
 }
 
+/**
+ * Composable function for displaying the user profile screen.
+ * @param viewModel The view model to manage Firebase data.
+ * @param navController The navigation controller.
+ */
 @Composable
 fun UserProfileScreen(    viewModel: FirebaseViewModel,  navController: NavController = rememberNavController()) {
     var text by remember { mutableStateOf("") }
@@ -72,21 +103,21 @@ fun UserProfileScreen(    viewModel: FirebaseViewModel,  navController: NavContr
                 .padding(top = 20.dp)
         )
         Text(
-            text = "John Doe",
+            text = viewModel.Name.value,
             style = MaterialTheme.typography.titleLarge,
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .padding(top = 130.dp)
         )
         Text(
-            text = "1234567@sit.singaporetech.edu.sg",
+            text = viewModel.sid.value+"@sit.singaporetech.edu.sg",
             style = MaterialTheme.typography.titleSmall,
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .padding(top = 160.dp)
         )
         OutlinedTextField(
-            value = "John Doe",
+            value = viewModel.Name.value,
             onValueChange = { text = it },
             label = { Text("Display Name") },
             modifier = Modifier
@@ -99,28 +130,7 @@ fun UserProfileScreen(    viewModel: FirebaseViewModel,  navController: NavContr
                 .padding(top = 300.dp, start = 20.dp)
                 .align(Alignment.TopCenter)
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically // Center the content vertically
-            ) {
-                Column {
-                    Text(
-                        text = "Enable Notifications",
-                        style = MaterialTheme.typography.titleLarge,
-                    )
-                    Text(
-                        text = "Notifies you when new books are out!",
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                }
-                Switch(
-                    checked = checked,
-                    onCheckedChange = {
-                        checked = it
-                    },
-                    modifier = Modifier
-                        .weight(1f)
-                )
-            }
+
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
@@ -133,18 +143,14 @@ fun UserProfileScreen(    viewModel: FirebaseViewModel,  navController: NavContr
 
             ) {
 
-                IconButton(
-                    onClick = {  },
-                    modifier = Modifier
-                        .padding(end = 10.dp)
-                        .size(24.dp)
-                ) {
+
                     Icon(
                         painter = painterResource(id = R.drawable.logout),
                         contentDescription = "Logout icon",
-                        tint = MaterialTheme.colorScheme.error
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(24.dp) // Adjust the size as needed
                     )
-                }
+
 
                 Text(
                     text = "Logout",
@@ -156,8 +162,3 @@ fun UserProfileScreen(    viewModel: FirebaseViewModel,  navController: NavContr
     }
 }
 
-//@Preview
-//@Composable
-//fun SettingPreview() {
-//    SettingScreen()
-//}

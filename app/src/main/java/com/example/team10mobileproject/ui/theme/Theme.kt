@@ -74,17 +74,17 @@ fun Team10MobileProjectTheme(
 }
 
 val gradientColorList = listOf(
-    Color(0xFFFFFFFF).copy(alpha = 0.5f),
-    Color(0xFF7D5260).copy(alpha = 0.5f) ,
-    Color(0xFF6650a4).copy(alpha = 0.5f),
-    Color(0xFFCCC2DC).copy(alpha = 0.5f),
+    Color(0xFFB6D5EE).copy(alpha = 0.5f),
+    Color(0xFF6299C5).copy(alpha = 0.5f) ,
+    Color(0xFF44718A).copy(alpha = 0.5f),
+    Color(0xFF235977).copy(alpha = 0.5f),
 
 
     )
 @Composable
 fun gradientBackgroundBrush(
     isVerticalGradient: Boolean,
-
+    colors: List<Color> = listOf(Color.Transparent, Color.Black) // Default gradient colors
 ): Brush {
     val endOffset = if (isVerticalGradient) {
         Offset(0f, Float.POSITIVE_INFINITY)
@@ -93,7 +93,7 @@ fun gradientBackgroundBrush(
     }
 
     return Brush.linearGradient(
-        colors = gradientColorList,
+        colors = colors,
         start = Offset.Zero,
         end = endOffset
     )

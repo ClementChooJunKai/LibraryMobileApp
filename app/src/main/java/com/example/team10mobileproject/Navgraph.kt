@@ -4,24 +4,20 @@ package com.example.team10mobileproject
 import Homepage
 import LoginScreen
 import PDFReader
-import android.util.Log
 
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.MutableState
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import com.example.team10mobileproject.Camera.MainScreen
 import com.example.team10mobileproject.Screens.BookDetails
 import com.example.team10mobileproject.Screens.BottomBar
-import com.example.team10mobileproject.Screens.QRScanner
+import com.example.team10mobileproject.Camera.QRScanner
 import com.example.team10mobileproject.Screens.ShelfScreen
 import com.example.team10mobileproject.Screens.BorrowScreen
+import com.example.team10mobileproject.Screens.LibraryCollectionScreen
 import com.example.team10mobileproject.Screens.SettingScreen
 import com.example.team10mobileproject.ViewModel.FirebaseViewModel
 import com.google.firebase.auth.FirebaseAuth
@@ -36,6 +32,8 @@ sealed class Screen(val route: String){
     object ShelfScreen : Screen(route="Shelf_screen")
     object BorrowScreen : Screen(route="Borrow_screen")
     object SettingScreen : Screen(route="Settings_screen")
+    object LibraryCollectionScreen : Screen(route="LibraryCollection_screen")
+    object MainScreen: Screen(route = "MainScreen_route")
 }
 
 @Composable
@@ -51,7 +49,7 @@ fun NavGraph(
     val uid = FirebaseAuth.getInstance().currentUser?.email
     val localPart = uid?.split("@")?.firstOrNull() ?: ""
     viewModel.sid.value = localPart
-    Log.d("sid", viewModel.sid.value)
+
     NavHost(
         navController = navController,
         startDestination = startDestination // Set the start destination
@@ -70,6 +68,7 @@ fun NavGraph(
         }
         composable(route = Screen.QrScanner.route) {
             QRScanner(
+                viewModel,
                 navController = navController,
                 activity = activity, // Provide the instance of ComponentActivity
                 onBarcodeScanned = { barcode ->
@@ -79,17 +78,23 @@ fun NavGraph(
             )
         }
         composable(route = Screen.PDFReader.route) {
-            PDFReader(navController = navController)
+            PDFReader(navController = navController, viewModel=viewModel)
         }
 
         composable(route = Screen.ShelfScreen.route) {
-            ShelfScreen(navController = navController)
+            ShelfScreen(navController = navController,viewModel)
+        }
+        composable(route = Screen.LibraryCollectionScreen.route) {
+            LibraryCollectionScreen(navController = navController,viewModel)
         }
         composable(route = Screen.BorrowScreen.route) {
             BorrowScreen(navController = navController, viewModel= viewModel)
         }
         composable(route = Screen.SettingScreen.route) {
             SettingScreen(navController = navController,viewModel= viewModel)
+        }
+        composable(route = Screen.MainScreen.route) {
+            MainScreen(navController = navController, viewModel = viewModel)
         }
 
     }
